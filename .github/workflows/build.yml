@@ -1,4 +1,3 @@
-
 name: Jawaker Android APK
 
 on:
@@ -21,20 +20,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          ZIP="Jawaker-Solitaire-Floating-Bot-auto-v3.zip"
+          ZIP=$(find . -maxdepth 1 -name "*.zip" -print -quit)
 
-          if [ ! -f "$ZIP" ]; then
-            echo "Project ZIP not found: $ZIP"
+          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
+            echo "ERROR: No ZIP file found in the repository!"
             exit 1
           fi
 
+          echo "Found project ZIP: $ZIP"
           mkdir -p /tmp/jawaker
           unzip -q "$ZIP" -d /tmp/jawaker
 
           APP=$(find /tmp/jawaker -type d -name app -print -quit)
 
           if [ -z "$APP" ]; then
-            echo "ERROR: app folder missing"
+            echo "ERROR: app folder missing inside $ZIP"
             exit 1
           fi
 
