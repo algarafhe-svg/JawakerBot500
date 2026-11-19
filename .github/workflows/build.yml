@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,28 +14,44 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
       - name: Generate Project & Build APK
         run: |
-          mkdir -p app/src/main/java/com/jawaker/solitairebot app/src/main/res/layout app/src/main/res/xml
+          mkdir -p app/src/main/java/com/jawaker/solitairebot app/src/main/res/layout app/src/main/res/xml app/src/main/res/values
+          
           cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = "JawakerBot"
           include ':app'
           EOF
+
           cat << 'EOF' > build.gradle
           plugins {
-              id 'com.android.application' version '8.1.4' apply false
-              id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+              id 'com.android.application' version '8.2.0' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
           }
           EOF
+
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           kotlin.code.style=official
           EOF
+
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -63,12 +80,19 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Jawaker Bot</string>
+          </resources>
+          EOF
+
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://android.com">
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <application android:allowBackup="true" android:label="Jawaker Bot" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+              <application android:allowBackup="true" android:label="@string/app_name" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -85,6 +109,7 @@ jobs:
               </application>
           </manifest>
           EOF
+
           cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://android.com"
@@ -94,6 +119,7 @@ jobs:
               android:description="@string/app_name"
               android:notificationTimeout="100" />
           EOF
+
           cat << 'EOF' > app/src/main/res/layout/overlay_layout.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://android.com"
@@ -109,6 +135,7 @@ jobs:
               </LinearLayout>
           </LinearLayout>
           EOF
+
           cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/MainActivity.kt
           package com.jawaker.solitairebot
           import android.content.Intent
@@ -134,6 +161,7 @@ jobs:
               }
           }
           EOF
+
           cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/BotAccessibilityService.kt
           package com.jawaker.solitairebot
           import android.accessibilityservice.AccessibilityService
@@ -153,6 +181,7 @@ jobs:
               fun tapScreen(x: Float, y: Float) { swipeCard(x, y, x, y, 50L) }
           }
           EOF
+
           cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/FloatingBotService.kt
           package com.jawaker.solitairebot
           import android.app.*
@@ -170,15 +199,3 @@ jobs:
               private val handler = Handler(Looper.getMainLooper())
               private val botLoop = object : Runnable {
                   override fun run() {
-                      if (!isRunning) return
-                      BotAccessibilityService.instance?.tapScreen(640f, 360f)
-                      handler.postDelayed(this, 900L)
-                  }
-              }
-              override fun onCreate() {
-                  super.onCreate()
-                  val channelId = "JawakerBotChannel"
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(channelId, "Jawaker Bot", NotificationManager.IMPORTANCE_LOW))
-                  }
-                  
