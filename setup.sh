@@ -1,19 +1,292 @@
-name: Build Android APK
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main, master ]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - run: bash setup.sh && gradle assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: JawakerBot-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+set -e
+mkdir -p app/src/main/java/com/jawaker/solitairebot app/src/main/res/layout app/src/main/res/xml app/src/main/res/values
+
+cat << 'EOF' > settings.gradle
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "JawakerBot"
+include ':app'
+EOF
+
+cat << 'EOF' > build.gradle
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
+}
+EOF
+
+cat << 'EOF' > gradle.properties
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+kotlin.code.style=official
+EOF
+
+cat << 'EOF' > app/build.gradle
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+android {
+    namespace 'com.jawaker.solitairebot'
+    compileSdk 34
+    defaultConfig {
+        applicationId "com.jawaker.solitairebot"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
+EOF
+
+cat << 'EOF' > app/src/main/res/values/strings.xml
+<resources>
+    <string name="app_name">Jawaker Bot</string>
+</resources>
+EOF
+
+cat << 'EOF' > app/src/main/AndroidManifest.xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://android.com">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".FloatingBotService" android:enabled="true" android:exported="false" />
+        <service
+            android:name=".BotAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
+        </service>
+    </application>
+</manifest>
+EOF
+
+cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://android.com"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canPerformGestures="true"
+    android:description="@string/app_name"
+    android:notificationTimeout="100" />
+EOF
+
+cat << 'EOF' > app/src/main/res/layout/overlay_layout.xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://android.com"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="#CC1E1E1E"
+    android:orientation="vertical"
+    android:padding="8dp">
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="جاهز (TECNO POVA)"
+        android:textColor="#00FF88"
+        android:textSize="11sp"
+        android:layout_marginBottom="4dp" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button
+            android:id="@+id/btn_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="#00C853"
+            android:text="▶ تشغيل"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+        <Button
+            android:id="@+id/btn_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="#D50000"
+            android:text="X"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>
+EOF
+
+cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/MainActivity.kt
+package com.jawaker.solitairebot
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.provider.Settings
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 100, 50, 50)
+        }
+        val btnOverlay = Button(this).apply {
+            text = "1. تفعيل الظهور فوق التطبيقات"
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            }
+        }
+        val btnAccess = Button(this).apply {
+            text = "2. تفعيل خدمة اللمس التلقائي"
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+        val btnStart = Button(this).apply {
+            text = "3. تشغيل النافذة العائمة فوق اللعبة"
+            setOnClickListener {
+                if (Settings.canDrawOverlays(this@MainActivity)) {
+                    startService(Intent(this@MainActivity, FloatingBotService::class.java))
+                    finish()
+                } else {
+                    Toast.makeText(this@MainActivity, "فعّل الظهور فوق التطبيقات أولاً", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        layout.addView(btnOverlay)
+        layout.addView(btnAccess)
+        layout.addView(btnStart)
+        setContentView(layout)
+    }
+}
+EOF
+
+cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/BotAccessibilityService.kt
+package com.jawaker.solitairebot
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.view.accessibility.AccessibilityEvent
+
+class BotAccessibilityService : AccessibilityService() {
+    companion object {
+        var instance: BotAccessibilityService? = null
+    }
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onInterrupt() {}
+    fun tapScreen(x: Float, y: Float) {
+        val path = Path().apply {
+            moveTo(x, y)
+            lineTo(x, y)
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 50L))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
+}
+EOF
+
+cat << 'EOF' > app/src/main/java/com/jawaker/solitairebot/FloatingBotService.kt
+package com.jawaker.solitairebot
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.TextView
+import androidx.core.app.NotificationCompat
+
+class FloatingBotService : Service() {
+    private lateinit var windowManager: WindowManager
+    private lateinit var overlayView: View
+    private var isRunning = false
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val botLoop = object : Runnable {
+        override fun run() {
+            if (!isRunning) return
+            BotAccessibilityService.instance?.tapScreen(640f, 360f)
+            handler.postDelayed(this, 900L)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        val channelId = "JawakerBotChannel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Jawaker Bot", NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("بوت جواكر نشط")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .build()
+        startForeground(1, notification)
+
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_layout, null)
+
+        val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
