@@ -14,8 +14,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
       - name: Generate Project & Build APK
         run: |
           mkdir -p app/src/main/java/com/jawaker/solitairebot app/src/main/res/layout app/src/main/res/xml app/src/main/res/values
@@ -199,3 +197,4 @@ jobs:
               private val handler = Handler(Looper.getMainLooper())
               private val botLoop = object : Runnable {
                   override fun run() {
+                      if (!isRunning) return
