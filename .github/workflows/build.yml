@@ -16,6 +16,7 @@ jobs:
           if [ -f "JawakerBot_clean.zip" ]; then
             unzip -o JawakerBot_clean.zip
           fi
+          find . -name "*.gradle*" -exec sed -i '/jcenter()/d' {} +
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
