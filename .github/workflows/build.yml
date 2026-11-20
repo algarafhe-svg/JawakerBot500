@@ -11,12 +11,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Extract ZIP if present
+      - name: Extract ZIP and Fix Gradle Files
         run: |
           if [ -f "JawakerBot_clean.zip" ]; then
             unzip -o JawakerBot_clean.zip
           fi
-          find . -name "*.gradle*" -exec sed -i '/jcenter()/d' {} +
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "JawakerBot"
+          include(":app")
+          EOF
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
