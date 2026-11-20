@@ -1,79 +1,39 @@
-name: Jawaker Android APK
-
+name: Build Jawaker Bot APK
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Extract project
-        shell: bash
+      - name: Extract ZIP if present
         run: |
-          set -euo pipefail
-
-          ZIP=$(find . -maxdepth 1 -name "*.zip" -print -quit)
-
-          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
-            echo "ERROR: No ZIP file found in the repository!"
-            exit 1
+          if [ -f "JawakerBot_clean.zip" ]; then
+            unzip -o JawakerBot_clean.zip
           fi
 
-          echo "Found project ZIP: $ZIP"
-          mkdir -p /tmp/jawaker
-          unzip -q "$ZIP" -d /tmp/jawaker
-
-          APP=$(find /tmp/jawaker -type d -name app -print -quit)
-
-          if [ -z "$APP" ]; then
-            echo "ERROR: app folder missing inside $ZIP"
-            exit 1
-          fi
-
-          ROOT=$(dirname "$APP")
-          cp -a "$ROOT"/. .
-
-          test -f gradlew
-          test -d app
-
-      - name: Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          accept-android-sdk-licenses: true
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Install SDK
-        run: |
-          sdkmanager "platforms;android-35" \
-                     "build-tools;35.0.0" \
-                     "platform-tools"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify Gradle wrapper
-        run: |
-          chmod +x gradlew
-          ./gradlew --version
-
-      - name: Build APK
-        run: |
-          ./gradlew --no-daemon --stacktrace assembleDebug
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Jawaker-Bot-APK
+          name: JawakerBot_v2
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
