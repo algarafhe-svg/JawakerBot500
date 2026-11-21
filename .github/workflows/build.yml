@@ -74,6 +74,19 @@ jobs:
           echo "Android Gradle Plugin and Kotlin versions from app/build.gradle.kts:"
           grep -E 'com\.android\.application|org\.jetbrains\.kotlin\.android' "$GITHUB_WORKSPACE/app/build.gradle.kts"
 
+      - name: Enable AndroidX
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch "$GITHUB_WORKSPACE/gradle.properties"
+          if grep -q '^android.useAndroidX=' "$GITHUB_WORKSPACE/gradle.properties"; then
+            sed -i 's/^android.useAndroidX=.*/android.useAndroidX=true/' "$GITHUB_WORKSPACE/gradle.properties"
+          else
+            echo 'android.useAndroidX=true' >> "$GITHUB_WORKSPACE/gradle.properties"
+          fi
+          echo "AndroidX enabled:"
+          grep '^android.useAndroidX=' "$GITHUB_WORKSPACE/gradle.properties"
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
